@@ -84,6 +84,8 @@ program
   .option('--reporters', 'display available reporters')
   .option('--compilers <ext>:<module>,...', 'use the given module(s) to compile files', list, [])
   .option('--inline-diffs', 'display actual/expected differences inline within each string')
+  .option('--use-inspect', 'when generating diffs, provide a hook for user-specified inspect functions')
+  .option('--diff-depth <depth>', 'maximum depth in which to descend in objects when generating diffs [20]')
   .option('--no-exit', 'require a clean shutdown of the event loop: mocha will not call process.exit')
 
 program.name = 'mocha';
@@ -213,6 +215,14 @@ if (~process.argv.indexOf('--colors') ||
 // --inline-diffs
 
 if (program.inlineDiffs) mocha.useInlineDiffs(true);
+
+// --use-inspect
+
+if (program.useInspect) mocha.useInspect(true);
+
+// --diff-depth <depth>
+
+if (program.diffDepth) mocha.diffDepth(program.diffDepth);
 
 // --slow <ms>
 

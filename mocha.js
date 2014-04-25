@@ -1671,6 +1671,36 @@ Mocha.prototype.useInlineDiffs = function(inlineDiffs) {
 };
 
 /**
+ * When generating diffs, provide a hook for user-specified
+ * inspect functions: replace each object that provides the
+ * inspect() function with it's return value.
+ *
+ * @param {Boolean} useInspect
+ * @return {Mocha}
+ * @api public
+ */
+
+Mocha.prototype.useInspect = function(useInspect) {
+  this.options.useInspect = arguments.length && useInspect != undefined
+  ? useInspect
+  : false;
+  return this;
+}
+
+/**
+ * Set maximum depth in which to descend in objects
+ * when generating diffs.
+ *
+ * @param {Number} diffDepth
+ * @return {Mocha}
+ * @api public
+ */
+
+Mocha.prototype.diffDepth = function(diffDepth) {
+  this.options.diffDepth = diffDepth;
+}
+
+/**
  * Set the timeout in milliseconds.
  *
  * @param {Number} timeout
@@ -1730,6 +1760,9 @@ Mocha.prototype.run = function(fn){
   if (options.growl) this._growl(runner, reporter);
   exports.reporters.Base.useColors = options.useColors;
   exports.reporters.Base.inlineDiffs = options.useInlineDiffs;
+  exports.reporters.Base.useInspect = options.useInspect;
+  if (options.diffDepth)
+    exports.reporters.Base.diffDepth = options.diffDepth;
   return runner.run(fn);
 };
 
@@ -1892,6 +1925,21 @@ exports.useColors = isatty || (process.env.MOCHA_COLORS !== undefined);
  */
 
 exports.inlineDiffs = false;
+
+/**
+ * When generating diffs, provide a hook for user-specified
+ * inspect functions: replace each object that provides the
+ * inspect() function with it's return value.
+ */
+
+exports.useInspect = false;
+
+/**
+ * Maximum depth in which to descend in objects when
+ * generating diffs.
+ */
+
+exports.diffDepth = 20;
 
 /**
  * Default color map.
@@ -2314,8 +2362,11 @@ function stringify(obj) {
  * @api private
  */
 
- function canonicalize(obj, stack) {
+ function canonicalize(obj, stack, depth, isInspected) {
+   if (depth < 0) return '(...)';
+
    stack = stack || [];
+   depth = (depth == undefined) ? exports.diffDepth : depth;
 
    if (utils.indexOf(stack, obj) !== -1) return obj;
 
@@ -2324,14 +2375,26 @@ function stringify(obj) {
    if ('[object Array]' == {}.toString.call(obj)) {
      stack.push(obj);
      canonicalizedObj = utils.map(obj, function(item) {
-       return canonicalize(item, stack);
+       return canonicalize(item, stack, depth - 1);
      });
      stack.pop();
    } else if (typeof obj === 'object' && obj !== null) {
      stack.push(obj);
+     if (exports.useInspect &&
+         !isInspected &&
+         typeof obj.inspect === 'function' &&
+         !(obj.constructor && obj.constructor.prototype === obj)
+     ) {
+       var inspectedObj = obj.inspect();
+       if (inspectedObj !== obj) {
+         canonicalizedObj = canonicalize(inspectedObj, stack, depth, true);
+         stack.pop();
+         return canonicalizedObj;
+       }
+     }
      canonicalizedObj = {};
      utils.forEach(utils.keys(obj).sort(), function(key) {
-       canonicalizedObj[key] = canonicalize(obj[key], stack);
+       canonicalizedObj[key] = canonicalize(obj[key], stack, depth - 1);
      });
      stack.pop();
    } else {
